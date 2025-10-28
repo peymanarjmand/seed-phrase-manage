@@ -247,6 +247,8 @@ const App: React.FC = () => {
   const [selectedWalletId, setSelectedWalletId] = useState<string>('');
   const [wordsA, setWordsA] = useState<string[]>(Array(TOTAL_WORDS).fill(''));
   const [wordsB, setWordsB] = useState<string[]>(Array(TOTAL_WORDS).fill(''));
+  const [selectedWalletAId, setSelectedWalletAId] = useState<string>('');
+  const [selectedWalletBId, setSelectedWalletBId] = useState<string>('');
   type ToastVariant = 'success' | 'error' | 'info';
   const [toast, setToast] = useState<{ open: boolean; message: string; variant: ToastVariant }>({ open: false, message: '', variant: 'info' });
   const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; message: string; confirmText: string; cancelText: string; onConfirm: null | (() => void) }>({ open: false, title: 'Confirm', message: '', confirmText: 'OK', cancelText: 'Cancel', onConfirm: null });
@@ -448,8 +450,78 @@ const App: React.FC = () => {
     const arr = Array.isArray(row.words) ? row.words : Array(TOTAL_WORDS).fill('');
     const next = Array(TOTAL_WORDS).fill('');
     for (let i = 0; i < TOTAL_WORDS; i++) next[i] = (arr[i] || '') as string;
-    if (panel === 'A') setWordsA(next); else setWordsB(next);
+    if (panel === 'A') { setWordsA(next); setSelectedWalletAId(id); } else { setWordsB(next); setSelectedWalletBId(id); }
     showToast(`Loaded to Wallet ${panel}.`, 'success');
+  };
+
+  const insertWalletWithWords = async (arr: string[]) => {
+    const name = `Wallet ${savedWallets.length + 1}`;
+    const { error } = await supabase.from('wallets').insert({
+      device_id: deviceId,
+      name,
+      words: arr,
+    });
+    if (error) {
+      console.error('Save failed', error);
+      showToast('Failed to save.', 'error');
+      return false;
+    }
+    await loadWallets();
+    showToast('Saved to Supabase.', 'success');
+    return true;
+  };
+
+  const updateWalletWithWords = async (id: string, arr: string[]) => {
+    const { error } = await supabase.from('wallets').update({ words: arr }).eq('id', id);
+    if (error) {
+      console.error('Update failed', error);
+      showToast('Failed to update.', 'error');
+      return false;
+    }
+    await loadWallets();
+    showToast('Wallet updated.', 'success');
+    return true;
+  };
+
+  const isPristineArr = (arr: string[]) => arr.every(w => w.trim() === '');
+
+  const handlePanelSave = (panel: 'A'|'B') => {
+    const arr = panel === 'A' ? wordsA : wordsB;
+    const selId = panel === 'A' ? selectedWalletAId : selectedWalletBId;
+    if (isPristineArr(arr)) { showToast('Nothing to save.', 'info'); return; }
+    if (selId) {
+      setChoiceState({
+        open: true,
+        title: `Save Wallet ${panel}`,
+        message: 'Update the loaded wallet or save as a new one?',
+        primaryLabel: 'Update Current',
+        secondaryLabel: 'Save New',
+        cancelText: 'Cancel',
+        onPrimary: async () => { setChoiceState(p => ({ ...p, open: false })); await updateWalletWithWords(selId, arr); },
+        onSecondary: async () => { setChoiceState(p => ({ ...p, open: false })); await insertWalletWithWords(arr); if (panel==='A') setSelectedWalletAId(''); else setSelectedWalletBId(''); },
+      });
+      return;
+    }
+    insertWalletWithWords(arr);
+  };
+
+  const handlePanelDelete = (panel: 'A'|'B') => {
+    const selId = panel === 'A' ? selectedWalletAId : selectedWalletBId;
+    if (!selId) { showToast('Select a wallet first.', 'info'); return; }
+    setConfirmState({
+      open: true,
+      title: `Delete Wallet ${panel}`,
+      message: 'Are you sure you want to delete this wallet?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        const { error } = await supabase.from('wallets').delete().eq('id', selId);
+        if (error) { console.error('Delete failed', error); showToast('Failed to delete.', 'error'); return; }
+        if (panel==='A') setSelectedWalletAId(''); else setSelectedWalletBId('');
+        await loadWallets();
+        showToast('Wallet deleted.', 'success');
+      }
+    });
   };
 
   const handleDeleteWallet = () => {
@@ -511,32 +583,34 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2 max-w-full flex-wrap">
-            <select
-              value={selectedWalletId}
-              onChange={(e) => handleSelectWallet(e.target.value)}
-              className="bg-gray-800 border border-gray-700 text-sm rounded-md px-3 py-2 text-gray-200 max-w-[70vw]"
-            >
-              <option value="">Load saved wallet…</option>
-              {savedWallets.map(w => (
-                <option key={w.id} value={w.id}>{w.name}</option>
-              ))}
-            </select>
-            <button
-              onClick={handleSaveToSupabase}
-              disabled={isPristine}
-              className={`px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${isPristine ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
-            >
-              Save
-            </button>
-            <button
-              onClick={handleDeleteWallet}
-              disabled={!selectedWalletId}
-              className={`px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${!selectedWalletId ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}
-            >
-              Delete
-            </button>
-          </div>
+          {!dualMode && (
+            <div className="flex items-center gap-2 max-w-full flex-wrap">
+              <select
+                value={selectedWalletId}
+                onChange={(e) => handleSelectWallet(e.target.value)}
+                className="bg-gray-800 border border-gray-700 text-sm rounded-md px-3 py-2 text-gray-200 max-w-[70vw]"
+              >
+                <option value="">Load saved wallet…</option>
+                {savedWallets.map(w => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleSaveToSupabase}
+                disabled={isPristine}
+                className={`px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${isPristine ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+              >
+                Save
+              </button>
+              <button
+                onClick={handleDeleteWallet}
+                disabled={!selectedWalletId}
+                className={`px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${!selectedWalletId ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}
+              >
+                Delete
+              </button>
+            </div>
+          )}
           <button
             onClick={() => setDualMode(v => !v)}
             className={`px-5 py-2 rounded-md text-sm font-semibold transition-all duration-200
@@ -561,6 +635,22 @@ const App: React.FC = () => {
                   ))}
                 </select>
               </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handlePanelSave('A')}
+                  className={`px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${isPristineArr(wordsA) ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                  disabled={isPristineArr(wordsA)}
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => handlePanelDelete('A')}
+                  className={`px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${!selectedWalletAId ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}
+                  disabled={!selectedWalletAId}
+                >
+                  Delete
+                </button>
+              </div>
               <SeedPanel title="Wallet A" value={wordsA} onChange={setWordsA} />
             </div>
             <div className="space-y-2">
@@ -574,6 +664,22 @@ const App: React.FC = () => {
                     <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
                 </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handlePanelSave('B')}
+                  className={`px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${isPristineArr(wordsB) ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                  disabled={isPristineArr(wordsB)}
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => handlePanelDelete('B')}
+                  className={`px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${!selectedWalletBId ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}
+                  disabled={!selectedWalletBId}
+                >
+                  Delete
+                </button>
               </div>
               <SeedPanel title="Wallet B" value={wordsB} onChange={setWordsB} />
             </div>
