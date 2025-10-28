@@ -27,10 +27,11 @@ const ClearIcon = () => (
 // Reusable panel for a single wallet's seed phrase
 interface SeedPanelProps {
   title: string;
+  value: string[];
+  onChange: (next: string[]) => void;
 }
 
-const SeedPanel: React.FC<SeedPanelProps> = ({ title }) => {
-  const [words, setWords] = useState<string[]>(Array(TOTAL_WORDS).fill(''));
+const SeedPanel: React.FC<SeedPanelProps> = ({ title, value, onChange }) => {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrStatus, setQrStatus] = useState<'idle' | 'generating' | 'error'>('idle');
@@ -41,20 +42,20 @@ const SeedPanel: React.FC<SeedPanelProps> = ({ title }) => {
     return sanitized.charAt(0).toUpperCase() + sanitized.slice(1);
   };
 
-  const handleWordChange = (index: number, value: string) => {
-    const firstWord = value.trim().split(/\s+/)[0] || '';
-    const newWords = [...words];
+  const handleWordChange = (index: number, val: string) => {
+    const firstWord = val.trim().split(/\s+/)[0] || '';
+    const newWords = [...value];
     newWords[index] = sanitizeAndCapitalize(firstWord);
-    setWords(newWords);
+    onChange(newWords);
     setCopyStatus('idle');
   };
 
-  const isComplete = useMemo(() => words.every(word => word.trim() !== ''), [words]);
-  const isPristine = useMemo(() => words.every(word => word.trim() === ''), [words]);
+  const isComplete = useMemo(() => value.every(word => word.trim() !== ''), [value]);
+  const isPristine = useMemo(() => value.every(word => word.trim() === ''), [value]);
 
   const handleCopyToClipboard = () => {
     if (!isComplete) return;
-    const seedPhrase = words.join(' ');
+    const seedPhrase = value.join(' ');
     navigator.clipboard.writeText(seedPhrase)
       .then(() => {
         setCopyStatus('copied');
@@ -76,7 +77,7 @@ const SeedPanel: React.FC<SeedPanelProps> = ({ title }) => {
       : parseInt(event.currentTarget.dataset.index || '0', 10);
 
     if (pastedWords.length > 0) {
-      const newWords = [...words];
+      const newWords = [...value];
       const wordsToFill = pastedWords.slice(0, TOTAL_WORDS - startIndex);
 
       wordsToFill.forEach((word, i) => {
@@ -85,13 +86,13 @@ const SeedPanel: React.FC<SeedPanelProps> = ({ title }) => {
           newWords[targetIndex] = sanitizeAndCapitalize(word);
         }
       });
-      setWords(newWords);
+      onChange(newWords);
       setCopyStatus('idle');
     }
   };
 
   const handleClearAll = () => {
-    setWords(Array(TOTAL_WORDS).fill(''));
+    onChange(Array(TOTAL_WORDS).fill(''));
     setCopyStatus('idle');
     setQrDataUrl(null);
     setQrStatus('idle');
@@ -101,7 +102,7 @@ const SeedPanel: React.FC<SeedPanelProps> = ({ title }) => {
     if (!isComplete) return;
     try {
       setQrStatus('generating');
-      const seedPhrase = words.join(' ');
+      const seedPhrase = value.join(' ');
       const url = await QRCode.toDataURL(seedPhrase, {
         errorCorrectionLevel: 'M',
         margin: 2,
@@ -125,7 +126,7 @@ const SeedPanel: React.FC<SeedPanelProps> = ({ title }) => {
     <main className="bg-gray-800 shadow-2xl rounded-lg p-6 md:p-8">
       <h2 className="text-2xl font-semibold mb-4 text-cyan-300">{title}</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-        {words.map((word, index) => (
+        {value.map((word, index) => (
           <div key={index} className="relative">
             <label htmlFor={`word-${title}-${index}`} className="absolute -top-2.5 left-2 inline-block bg-gray-800 px-1 text-sm font-medium text-gray-400">
               Word {index + 1}
@@ -244,6 +245,8 @@ const App: React.FC = () => {
   const [deviceId, setDeviceId] = useState<string>('');
   const [savedWallets, setSavedWallets] = useState<WalletRow[]>([]);
   const [selectedWalletId, setSelectedWalletId] = useState<string>('');
+  const [wordsA, setWordsA] = useState<string[]>(Array(TOTAL_WORDS).fill(''));
+  const [wordsB, setWordsB] = useState<string[]>(Array(TOTAL_WORDS).fill(''));
   type ToastVariant = 'success' | 'error' | 'info';
   const [toast, setToast] = useState<{ open: boolean; message: string; variant: ToastVariant }>({ open: false, message: '', variant: 'info' });
   const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; message: string; confirmText: string; cancelText: string; onConfirm: null | (() => void) }>({ open: false, title: 'Confirm', message: '', confirmText: 'OK', cancelText: 'Cancel', onConfirm: null });
@@ -439,6 +442,16 @@ const App: React.FC = () => {
     }
   };
 
+  const handleLoadWalletTo = (panel: 'A' | 'B', id: string) => {
+    const row = savedWallets.find(w => w.id === id);
+    if (!row) return;
+    const arr = Array.isArray(row.words) ? row.words : Array(TOTAL_WORDS).fill('');
+    const next = Array(TOTAL_WORDS).fill('');
+    for (let i = 0; i < TOTAL_WORDS; i++) next[i] = (arr[i] || '') as string;
+    if (panel === 'A') setWordsA(next); else setWordsB(next);
+    showToast(`Loaded to Wallet ${panel}.`, 'success');
+  };
+
   const handleDeleteWallet = () => {
     if (!selectedWalletId) {
       showToast('Select a wallet first.', 'info');
@@ -536,8 +549,34 @@ const App: React.FC = () => {
 
         {dualMode && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <SeedPanel title="Wallet A" />
-            <SeedPanel title="Wallet B" />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <select
+                  onChange={(e) => handleLoadWalletTo('A', e.target.value)}
+                  className="bg-gray-800 border border-gray-700 text-sm rounded-md px-3 py-2 text-gray-200 w-full"
+                >
+                  <option value="">Load into Wallet A…</option>
+                  {savedWallets.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+              <SeedPanel title="Wallet A" value={wordsA} onChange={setWordsA} />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <select
+                  onChange={(e) => handleLoadWalletTo('B', e.target.value)}
+                  className="bg-gray-800 border border-gray-700 text-sm rounded-md px-3 py-2 text-gray-200 w-full"
+                >
+                  <option value="">Load into Wallet B…</option>
+                  {savedWallets.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+              <SeedPanel title="Wallet B" value={wordsB} onChange={setWordsB} />
+            </div>
           </div>
         )}
 
