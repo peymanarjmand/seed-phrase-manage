@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
+import * as QRCode from 'qrcode';
 
 const TOTAL_WORDS = 12;
 
@@ -25,6 +26,8 @@ const ClearIcon = () => (
 const App: React.FC = () => {
   const [words, setWords] = useState<string[]>(Array(TOTAL_WORDS).fill(''));
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrStatus, setQrStatus] = useState<'idle' | 'generating' | 'error'>('idle');
 
   const sanitizeAndCapitalize = (word: string): string => {
     const sanitized = word.toLowerCase().replace(/[^a-z]/g, '');
@@ -85,7 +88,33 @@ const App: React.FC = () => {
   const handleClearAll = () => {
     setWords(Array(TOTAL_WORDS).fill(''));
     setCopyStatus('idle');
+    setQrDataUrl(null);
+    setQrStatus('idle');
   }
+
+  const handleGenerateQR = async () => {
+    if (!isComplete) return;
+    try {
+      setQrStatus('generating');
+      const seedPhrase = words.join(' ');
+      const url = await QRCode.toDataURL(seedPhrase, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 320,
+      });
+      setQrDataUrl(url);
+      setQrStatus('idle');
+    } catch (e) {
+      console.error('Failed to generate QR:', e);
+      setQrStatus('error');
+      alert('Failed to generate QR code.');
+    }
+  };
+
+  const handleClearQR = () => {
+    setQrDataUrl(null);
+    setQrStatus('idle');
+  };
 
 
   return (
@@ -164,7 +193,49 @@ const App: React.FC = () => {
               <ClearIcon />
               Clear All
             </button>
+
+            <button
+              onClick={handleGenerateQR}
+              disabled={!isComplete || qrStatus === 'generating'}
+              className={`
+                inline-flex items-center justify-center w-full sm:w-auto px-8 py-4 text-lg font-semibold rounded-md transition-all duration-300 ease-in-out
+                ${!isComplete
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  : qrStatus === 'generating'
+                  ? 'bg-gray-700 text-gray-300 cursor-wait'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500/50 transform hover:scale-105'
+                }
+              `}
+            >
+              {qrStatus === 'generating' ? 'Generating QR…' : 'Generate QR Code'}
+            </button>
           </div>
+
+          {qrDataUrl && (
+            <div className="mt-8 flex flex-col items-center">
+              <div className="bg-white p-4 rounded-lg shadow-lg">
+                <img src={qrDataUrl} alt="Seed phrase QR" className="w-64 h-64" />
+              </div>
+              <div className="mt-4 flex gap-4">
+                <a
+                  href={qrDataUrl}
+                  download={`seed-phrase-qr.png`}
+                  className="px-6 py-3 rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-500/50"
+                >
+                  Download PNG
+                </a>
+                <button
+                  onClick={handleClearQR}
+                  className="px-6 py-3 rounded-md bg-gray-700 text-white hover:bg-gray-600 focus:outline-none focus:ring-4 focus:ring-gray-500/50"
+                >
+                  Clear QR
+                </button>
+              </div>
+              <p className="mt-3 text-gray-400 text-sm text-center max-w-xl">
+                Note: Some wallets may not support scanning seed phrases directly via QR. If scanning fails in Trust Wallet, use the text copy and paste.
+              </p>
+            </div>
+          )}
         </main>
 
         <footer className="text-center mt-8 text-gray-500 text-sm">
