@@ -1,0 +1,5 @@
+{
+  "name": "Seed Phrase Manager",
+  "description": "A simple and secure tool to manage and copy your 12-word seed phrase. Enter your words and copy them to the clipboard with a single click.",
+  "requestFramePermissions": []
+}
