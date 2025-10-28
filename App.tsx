@@ -349,13 +349,11 @@ const App: React.FC = () => {
     setDeviceId(id);
   }, []);
 
-  // Load wallets for this device
+  // Load all wallets (no device filter)
   const loadWallets = async () => {
-    if (!deviceId) return;
     const { data, error } = await supabase
       .from('wallets')
       .select('id,name,words,created_at')
-      .eq('device_id', deviceId)
       .order('created_at', { ascending: false });
     if (error) {
       console.error('Failed to load wallets', error);
@@ -365,9 +363,8 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!deviceId) return;
     loadWallets();
-  }, [deviceId]);
+  }, []);
 
   // Save current words to Supabase (even if incomplete)
   const handleSaveToSupabase = async () => {
@@ -407,6 +404,8 @@ const App: React.FC = () => {
     }
   };
 
+  // Device ID utilities removed from UI scope to avoid confusion
+
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-start md:justify-center p-4 pb-24 md:pb-6 font-sans">
@@ -422,7 +421,7 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2 max-w-full">
+          <div className="flex items-center gap-2 max-w-full flex-wrap">
             <select
               value={selectedWalletId}
               onChange={(e) => handleSelectWallet(e.target.value)}
