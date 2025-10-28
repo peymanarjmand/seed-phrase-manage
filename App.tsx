@@ -33,7 +33,6 @@ const SeedPanel: React.FC<SeedPanelProps> = ({ title }) => {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrStatus, setQrStatus] = useState<'idle' | 'generating' | 'error'>('idle');
-  const [dualMode, setDualMode] = useState<boolean>(false);
 
   const sanitizeAndCapitalize = (word: string): string => {
     const sanitized = word.toLowerCase().replace(/[^a-z]/g, '');
@@ -124,7 +123,7 @@ const SeedPanel: React.FC<SeedPanelProps> = ({ title }) => {
   return (
     <main className="bg-gray-800 shadow-2xl rounded-lg p-6 md:p-8">
       <h2 className="text-2xl font-semibold mb-4 text-cyan-300">{title}</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
         {words.map((word, index) => (
           <div key={index} className="relative">
             <label htmlFor={`word-${title}-${index}`} className="absolute -top-2.5 left-2 inline-block bg-gray-800 px-1 text-sm font-medium text-gray-400">
@@ -154,9 +153,9 @@ const SeedPanel: React.FC<SeedPanelProps> = ({ title }) => {
               ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
               : copyStatus === 'copied'
               ? 'bg-green-600 text-white'
-              : 'bg-cyan-600 text-white hover:bg-cyan-700 focus:outline.none focus:ring-4 focus:ring-cyan-500/50 transform hover:scale-105'
-            }
-          `}
+              : 'bg-cyan-600 text-white hover:bg-cyan-700 focus:outline-none focus:ring-4 focus:ring-cyan-500/50 transform hover:scale-105'
+          }
+        `}
         >
           {copyStatus === 'copied' ? (
             <>
@@ -213,13 +212,13 @@ const SeedPanel: React.FC<SeedPanelProps> = ({ title }) => {
             <a
               href={qrDataUrl}
               download={`seed-phrase-qr-${title.replace(/\s+/g,'-').toLowerCase()}.png`}
-              className="px-6 py-3 rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline.none focus:ring-4 focus:ring-green-500/50"
+              className="px-6 py-3 rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-500/50"
             >
               Download PNG
             </a>
             <button
               onClick={handleClearQR}
-              className="px-6 py-3 rounded-md bg-gray-700 text-white hover:bg-gray-600 focus:outline.none focus:ring-4 focus:ring-gray-500/50"
+              className="px-6 py-3 rounded-md bg-gray-700 text-white hover:bg-gray-600 focus:outline-none focus:ring-4 focus:ring-gray-500/50"
             >
               Clear QR
             </button>
@@ -334,7 +333,7 @@ const App: React.FC = () => {
 
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4 font-sans">
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-start md:justify-center p-4 pb-24 md:pb-6 font-sans">
       <div className="w-full max-w-4xl mx-auto">
         <header className="text-center mb-6">
           <h1 className="text-4xl md:text-5xl font-bold text-cyan-400">Seed Phrase Manager</h1>
@@ -342,8 +341,8 @@ const App: React.FC = () => {
         </header>
 
         <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg relative mb-8" role="alert">
-          <strong className="font-bold">Security Warning!</strong>
-          <span className="block sm:inline ml-2">Never enter your seed phrase on a device you don't trust. This tool is intended for secure environments. The creator is not responsible for any loss of funds.</span>
+          <strong className="font-bold text-sm sm:text-base">Security Warning!</strong>
+          <span className="block sm:inline ml-2 text-xs sm:text-sm">Never enter your seed phrase on a device you don't trust. This tool is intended for secure environments. The creator is not responsible for any loss of funds.</span>
         </div>
 
         <div className="flex justify-between items-center mb-4">
@@ -366,7 +365,7 @@ const App: React.FC = () => {
         )}
 
         <main className={dualMode ? 'hidden' : 'bg-gray-800 shadow-2xl rounded-lg p-6 md:p-8'}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
             {words.map((word, index) => (
               <div key={index} className="relative">
                 <label htmlFor={`word-${index}`} className="absolute -top-2.5 left-2 inline-block bg-gray-800 px-1 text-sm font-medium text-gray-400">
@@ -386,7 +385,7 @@ const App: React.FC = () => {
             ))}
           </div>
 
-          <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
+          <div className="mt-8 hidden md:flex justify-center items-center gap-4">
             <button
               onClick={handleCopyToClipboard}
               disabled={!isComplete || copyStatus === 'copied'}
@@ -472,6 +471,60 @@ const App: React.FC = () => {
             </div>
           )}
         </main>
+
+        {!dualMode && (
+          <div
+            className="fixed bottom-0 left-0 right-0 md:hidden z-50 bg-gray-800/95 backdrop-blur border-t border-gray-700 px-3 py-3 flex items-center justify-between"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            <button
+              onClick={handleCopyToClipboard}
+              disabled={!isComplete || copyStatus === 'copied'}
+              className={`${!isComplete
+                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                : copyStatus === 'copied'
+                ? 'bg-green-600 text-white'
+                : 'bg-cyan-600 text-white active:bg-cyan-700'
+              } flex-1 mx-1 px-4 py-3 text-sm font-semibold rounded-md inline-flex items-center justify-center`}
+            >
+              {copyStatus === 'copied' ? (
+                <>
+                  <CheckIcon />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <CopyIcon />
+                  Copy
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleClearAll}
+              disabled={isPristine}
+              className={`${isPristine
+                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                : 'bg-red-600 text-white active:bg-red-700'
+              } flex-1 mx-1 px-4 py-3 text-sm font-semibold rounded-md inline-flex items-center justify-center`}
+              aria-label="Clear all words"
+            >
+              <ClearIcon />
+              Clear
+            </button>
+            <button
+              onClick={handleGenerateQR}
+              disabled={!isComplete || qrStatus === 'generating'}
+              className={`${!isComplete
+                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                : qrStatus === 'generating'
+                ? 'bg-gray-700 text-gray-300 cursor-wait'
+                : 'bg-indigo-600 text-white active:bg-indigo-700'
+              } flex-1 mx-1 px-4 py-3 text-sm font-semibold rounded-md inline-flex items-center justify-center`}
+            >
+              {qrStatus === 'generating' ? 'QR…' : 'QR'}
+            </button>
+          </div>
+        )}
 
         <footer className="text-center mt-8 text-gray-500 text-sm">
           <p>&copy; {new Date().getFullYear()} Secure Seed Phrase Tool. All rights reserved.</p>
