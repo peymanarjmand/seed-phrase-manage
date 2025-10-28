@@ -404,6 +404,24 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteWallet = async () => {
+    if (!selectedWalletId) {
+      alert('Select a wallet first.');
+      return;
+    }
+    const ok = confirm('Delete this wallet?');
+    if (!ok) return;
+    const { error } = await supabase.from('wallets').delete().eq('id', selectedWalletId);
+    if (error) {
+      console.error('Delete failed', error);
+      alert('Failed to delete.');
+      return;
+    }
+    setSelectedWalletId('');
+    await loadWallets();
+    alert('Wallet deleted.');
+  };
+
   // Device ID utilities removed from UI scope to avoid confusion
 
 
@@ -438,6 +456,13 @@ const App: React.FC = () => {
               className={`px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${isPristine ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
             >
               Save
+            </button>
+            <button
+              onClick={handleDeleteWallet}
+              disabled={!selectedWalletId}
+              className={`px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${!selectedWalletId ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}
+            >
+              Delete
             </button>
           </div>
           <button
