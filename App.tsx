@@ -65,23 +65,27 @@ const App: React.FC = () => {
   
   const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
     event.preventDefault();
-    const pastedText = event.clipboardData.getData('text');
-    const pastedWords = pastedText.trim().split(/\s+/);
-    
-    const startIndex = parseInt(event.currentTarget.dataset.index || '0', 10);
-    
+    const pastedText = event.clipboardData.getData('text') || '';
+    const pastedWords = pastedText.trim().split(/\s+/).filter(Boolean);
+
+    // If the clipboard contains a full phrase (multiple words), import from the start.
+    // Otherwise, treat it as a single-word paste into the focused field.
+    const startIndex = pastedWords.length > 1
+      ? 0
+      : parseInt(event.currentTarget.dataset.index || '0', 10);
+
     if (pastedWords.length > 0) {
-        const newWords = [...words];
-        const wordsToFill = pastedWords.slice(0, TOTAL_WORDS - startIndex);
-        
-        wordsToFill.forEach((word, i) => {
-          const targetIndex = startIndex + i;
-          if (targetIndex < TOTAL_WORDS) {
-            newWords[targetIndex] = sanitizeAndCapitalize(word);
-          }
-        });
-        setWords(newWords);
-        setCopyStatus('idle');
+      const newWords = [...words];
+      const wordsToFill = pastedWords.slice(0, TOTAL_WORDS - startIndex);
+
+      wordsToFill.forEach((word, i) => {
+        const targetIndex = startIndex + i;
+        if (targetIndex < TOTAL_WORDS) {
+          newWords[targetIndex] = sanitizeAndCapitalize(word);
+        }
+      });
+      setWords(newWords);
+      setCopyStatus('idle');
     }
   };
 
