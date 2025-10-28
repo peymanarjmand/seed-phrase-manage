@@ -247,6 +247,7 @@ const App: React.FC = () => {
   type ToastVariant = 'success' | 'error' | 'info';
   const [toast, setToast] = useState<{ open: boolean; message: string; variant: ToastVariant }>({ open: false, message: '', variant: 'info' });
   const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; message: string; confirmText: string; cancelText: string; onConfirm: null | (() => void) }>({ open: false, title: 'Confirm', message: '', confirmText: 'OK', cancelText: 'Cancel', onConfirm: null });
+  const [choiceState, setChoiceState] = useState<{ open: boolean; title: string; message: string; primaryLabel: string; secondaryLabel: string; cancelText: string; onPrimary: null | (() => void); onSecondary: null | (() => void) }>({ open: false, title: 'Save Options', message: '', primaryLabel: 'Update Current', secondaryLabel: 'Save New', cancelText: 'Cancel', onPrimary: null, onSecondary: null });
 
   const sanitizeAndCapitalize = (word: string): string => {
     const sanitized = word.toLowerCase().replace(/[^a-z]/g, '');
@@ -369,13 +370,8 @@ const App: React.FC = () => {
     loadWallets();
   }, []);
 
-  // Save current words to Supabase (even if incomplete)
-  const handleSaveToSupabase = async () => {
-    if (!deviceId) return;
-    if (isPristine) {
-      showToast('Nothing to save.', 'info');
-      return;
-    }
+  // Insert new wallet
+  const insertWallet = async () => {
     const name = `Wallet ${savedWallets.length + 1}`;
     const { error } = await supabase.from('wallets').insert({
       device_id: deviceId,
@@ -390,6 +386,42 @@ const App: React.FC = () => {
     await loadWallets();
     setSelectedWalletId('');
     showToast('Saved to Supabase.', 'success');
+  };
+
+  // Update selected wallet words (supports add/remove/change words)
+  const updateWallet = async () => {
+    if (!selectedWalletId) return;
+    const { error } = await supabase.from('wallets').update({ words }).eq('id', selectedWalletId);
+    if (error) {
+      console.error('Update failed', error);
+      showToast('Failed to update.', 'error');
+      return;
+    }
+    await loadWallets();
+    showToast('Wallet updated.', 'success');
+  };
+
+  // Save current words to Supabase (insert or update by user choice)
+  const handleSaveToSupabase = async () => {
+    if (!deviceId) return;
+    if (isPristine) {
+      showToast('Nothing to save.', 'info');
+      return;
+    }
+    if (selectedWalletId) {
+      setChoiceState({
+        open: true,
+        title: 'Save Wallet',
+        message: 'Update the selected wallet or save as a new one?',
+        primaryLabel: 'Update Current',
+        secondaryLabel: 'Save New',
+        cancelText: 'Cancel',
+        onPrimary: async () => { setChoiceState(prev => ({ ...prev, open: false })); await updateWallet(); },
+        onSecondary: async () => { setChoiceState(prev => ({ ...prev, open: false })); await insertWallet(); },
+      });
+      return;
+    }
+    await insertWallet();
   };
 
   const handleSelectWallet = (id: string) => {
@@ -444,6 +476,10 @@ const App: React.FC = () => {
     closeConfirm();
     if (act) await act();
   };
+
+  const closeChoice = () => setChoiceState(prev => ({ ...prev, open: false, onPrimary: null, onSecondary: null }));
+  const handleChoicePrimary = async () => { const a = choiceState.onPrimary; closeChoice(); if (a) await a(); };
+  const handleChoiceSecondary = async () => { const a = choiceState.onSecondary; closeChoice(); if (a) await a(); };
 
   // Device ID utilities removed from UI scope to avoid confusion
 
@@ -701,6 +737,37 @@ const App: React.FC = () => {
                 className="flex-1 px-4 py-3 text-sm font-semibold rounded-md bg-red-600 text-white hover:bg-red-700"
               >
                 {confirmState.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {choiceState.open && (
+        <div className="fixed inset-0 z-[60]">
+          <div className="absolute inset-0 bg-black/50" onClick={closeChoice} />
+          <div className="absolute bottom-0 left-0 right-0 bg-gray-800 rounded-t-2xl p-4 shadow-2xl md:max-w-md md:mx-auto md:top-1/2 md:-translate-y-1/2 md:rounded-2xl">
+            <div className="h-1.5 w-12 bg-gray-600 rounded-full mx-auto mb-3 md:hidden" />
+            <h3 className="text-lg font-semibold text-white mb-1">{choiceState.title}</h3>
+            <p className="text-gray-300 text-sm mb-4">{choiceState.message}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button
+                onClick={closeChoice}
+                className="px-4 py-3 text-sm font-semibold rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600"
+              >
+                {choiceState.cancelText}
+              </button>
+              <button
+                onClick={handleChoiceSecondary}
+                className="px-4 py-3 text-sm font-semibold rounded-md bg-cyan-600 text-white hover:bg-cyan-700"
+              >
+                {choiceState.secondaryLabel}
+              </button>
+              <button
+                onClick={handleChoicePrimary}
+                className="px-4 py-3 text-sm font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
+              >
+                {choiceState.primaryLabel}
               </button>
             </div>
           </div>
