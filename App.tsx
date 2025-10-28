@@ -244,6 +244,9 @@ const App: React.FC = () => {
   const [deviceId, setDeviceId] = useState<string>('');
   const [savedWallets, setSavedWallets] = useState<WalletRow[]>([]);
   const [selectedWalletId, setSelectedWalletId] = useState<string>('');
+  type ToastVariant = 'success' | 'error' | 'info';
+  const [toast, setToast] = useState<{ open: boolean; message: string; variant: ToastVariant }>({ open: false, message: '', variant: 'info' });
+  const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; message: string; confirmText: string; cancelText: string; onConfirm: null | (() => void) }>({ open: false, title: 'Confirm', message: '', confirmText: 'OK', cancelText: 'Cancel', onConfirm: null });
 
   const sanitizeAndCapitalize = (word: string): string => {
     const sanitized = word.toLowerCase().replace(/[^a-z]/g, '');
@@ -275,7 +278,7 @@ const App: React.FC = () => {
       })
       .catch(err => {
         console.error('Failed to copy text: ', err);
-        alert('Failed to copy seed phrase.');
+        showToast('Failed to copy seed phrase.', 'error');
       });
   };
   
@@ -327,7 +330,7 @@ const App: React.FC = () => {
     } catch (e) {
       console.error('Failed to generate QR:', e);
       setQrStatus('error');
-      alert('Failed to generate QR code.');
+      showToast('Failed to generate QR code.', 'error');
     }
   };
 
@@ -370,7 +373,7 @@ const App: React.FC = () => {
   const handleSaveToSupabase = async () => {
     if (!deviceId) return;
     if (isPristine) {
-      alert('Nothing to save.');
+      showToast('Nothing to save.', 'info');
       return;
     }
     const name = `Wallet ${savedWallets.length + 1}`;
@@ -381,12 +384,12 @@ const App: React.FC = () => {
     });
     if (error) {
       console.error('Save failed', error);
-      alert('Failed to save.');
+      showToast('Failed to save.', 'error');
       return;
     }
     await loadWallets();
     setSelectedWalletId('');
-    alert('Saved to Supabase.');
+    showToast('Saved to Supabase.', 'success');
   };
 
   const handleSelectWallet = (id: string) => {
@@ -404,22 +407,42 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteWallet = async () => {
+  const handleDeleteWallet = () => {
     if (!selectedWalletId) {
-      alert('Select a wallet first.');
+      showToast('Select a wallet first.', 'info');
       return;
     }
-    const ok = confirm('Delete this wallet?');
-    if (!ok) return;
-    const { error } = await supabase.from('wallets').delete().eq('id', selectedWalletId);
-    if (error) {
-      console.error('Delete failed', error);
-      alert('Failed to delete.');
-      return;
-    }
-    setSelectedWalletId('');
-    await loadWallets();
-    alert('Wallet deleted.');
+    setConfirmState({
+      open: true,
+      title: 'Delete Wallet',
+      message: 'Are you sure you want to delete this wallet? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        const { error } = await supabase.from('wallets').delete().eq('id', selectedWalletId);
+        if (error) {
+          console.error('Delete failed', error);
+          showToast('Failed to delete.', 'error');
+          return;
+        }
+        setSelectedWalletId('');
+        await loadWallets();
+        showToast('Wallet deleted.', 'success');
+      }
+    });
+  };
+
+  const showToast = (message: string, variant: ToastVariant = 'info') => {
+    setToast({ open: true, message, variant });
+    window.clearTimeout((showToast as any)._t);
+    (showToast as any)._t = window.setTimeout(() => setToast(prev => ({ ...prev, open: false })), 2500);
+  };
+
+  const closeConfirm = () => setConfirmState(prev => ({ ...prev, open: false, onConfirm: null }));
+  const handleConfirmProceed = async () => {
+    const act = confirmState.onConfirm;
+    closeConfirm();
+    if (act) await act();
   };
 
   // Device ID utilities removed from UI scope to avoid confusion
@@ -658,6 +681,44 @@ const App: React.FC = () => {
           <p>&copy; {new Date().getFullYear()} Secure Seed Phrase Tool. All rights reserved.</p>
         </footer>
       </div>
+
+      {confirmState.open && (
+        <div className="fixed inset-0 z-[60]">
+          <div className="absolute inset-0 bg-black/50" onClick={closeConfirm} />
+          <div className="absolute bottom-0 left-0 right-0 bg-gray-800 rounded-t-2xl p-4 shadow-2xl md:max-w-md md:mx-auto md:top-1/2 md:-translate-y-1/2 md:rounded-2xl">
+            <div className="h-1.5 w-12 bg-gray-600 rounded-full mx-auto mb-3 md:hidden" />
+            <h3 className="text-lg font-semibold text-white mb-1">{confirmState.title}</h3>
+            <p className="text-gray-300 text-sm mb-4">{confirmState.message}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={closeConfirm}
+                className="flex-1 px-4 py-3 text-sm font-semibold rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600"
+              >
+                {confirmState.cancelText}
+              </button>
+              <button
+                onClick={handleConfirmProceed}
+                className="flex-1 px-4 py-3 text-sm font-semibold rounded-md bg-red-600 text-white hover:bg-red-700"
+              >
+                {confirmState.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast.open && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-[55] md:bottom-6"
+          style={{ bottom: dualMode ? '24px' : '96px', paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          <div
+            className={`${toast.variant === 'success' ? 'bg-emerald-600' : toast.variant === 'error' ? 'bg-red-600' : 'bg-gray-700'} text-white rounded-full px-4 py-3 text-sm font-semibold shadow-lg`}
+          >
+            {toast.message}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
