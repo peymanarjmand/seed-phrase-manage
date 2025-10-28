@@ -1,6 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import * as QRCode from 'qrcode';
+import { supabase } from './supabase';
 
 const TOTAL_WORDS = 12;
 
@@ -239,6 +240,10 @@ const App: React.FC = () => {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrStatus, setQrStatus] = useState<'idle' | 'generating' | 'error'>('idle');
   const [dualMode, setDualMode] = useState<boolean>(false);
+  type WalletRow = { id: string; name: string; words: string[]; created_at: string };
+  const [deviceId, setDeviceId] = useState<string>('');
+  const [savedWallets, setSavedWallets] = useState<WalletRow[]>([]);
+  const [selectedWalletId, setSelectedWalletId] = useState<string>('');
 
   const sanitizeAndCapitalize = (word: string): string => {
     const sanitized = word.toLowerCase().replace(/[^a-z]/g, '');
@@ -331,6 +336,77 @@ const App: React.FC = () => {
     setQrStatus('idle');
   };
 
+  // Device ID persistence
+  useEffect(() => {
+    const key = 'spm_device_id';
+    let id = localStorage.getItem(key) || '';
+    if (!id) {
+      id = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+        ? (crypto as Crypto).randomUUID()
+        : Math.random().toString(36).slice(2);
+      localStorage.setItem(key, id);
+    }
+    setDeviceId(id);
+  }, []);
+
+  // Load wallets for this device
+  const loadWallets = async () => {
+    if (!deviceId) return;
+    const { data, error } = await supabase
+      .from('wallets')
+      .select('id,name,words,created_at')
+      .eq('device_id', deviceId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Failed to load wallets', error);
+      return;
+    }
+    setSavedWallets(data || []);
+  };
+
+  useEffect(() => {
+    if (!deviceId) return;
+    loadWallets();
+  }, [deviceId]);
+
+  // Save current words to Supabase (even if incomplete)
+  const handleSaveToSupabase = async () => {
+    if (!deviceId) return;
+    if (isPristine) {
+      alert('Nothing to save.');
+      return;
+    }
+    const name = `Wallet ${savedWallets.length + 1}`;
+    const { error } = await supabase.from('wallets').insert({
+      device_id: deviceId,
+      name,
+      words,
+    });
+    if (error) {
+      console.error('Save failed', error);
+      alert('Failed to save.');
+      return;
+    }
+    await loadWallets();
+    setSelectedWalletId('');
+    alert('Saved to Supabase.');
+  };
+
+  const handleSelectWallet = (id: string) => {
+    setSelectedWalletId(id);
+    const row = savedWallets.find(w => w.id === id);
+    if (row) {
+      const arr = Array.isArray(row.words) ? row.words : Array(TOTAL_WORDS).fill('');
+      // Ensure exactly 12 positions
+      const next = Array(TOTAL_WORDS).fill('');
+      for (let i = 0; i < TOTAL_WORDS; i++) next[i] = (arr[i] || '') as string;
+      setWords(next);
+      setCopyStatus('idle');
+      setQrDataUrl(null);
+      setQrStatus('idle');
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-start md:justify-center p-4 pb-24 md:pb-6 font-sans">
@@ -346,7 +422,25 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex justify-between items-center mb-4">
-          <div></div>
+          <div className="flex items-center gap-2 max-w-full">
+            <select
+              value={selectedWalletId}
+              onChange={(e) => handleSelectWallet(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-sm rounded-md px-3 py-2 text-gray-200 max-w-[70vw]"
+            >
+              <option value="">Load saved wallet…</option>
+              {savedWallets.map(w => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleSaveToSupabase}
+              disabled={isPristine}
+              className={`px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${isPristine ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+            >
+              Save
+            </button>
+          </div>
           <button
             onClick={() => setDualMode(v => !v)}
             className={`px-5 py-2 rounded-md text-sm font-semibold transition-all duration-200
@@ -498,6 +592,16 @@ const App: React.FC = () => {
                   Copy
                 </>
               )}
+            </button>
+            <button
+              onClick={handleSaveToSupabase}
+              disabled={isPristine}
+              className={`${isPristine
+                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                : 'bg-emerald-600 text-white active:bg-emerald-700'
+              } flex-1 mx-1 px-4 py-3 text-sm font-semibold rounded-md inline-flex items-center justify-center`}
+            >
+              Save
             </button>
             <button
               onClick={handleClearAll}
